@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <cstring>
+#include <zconf.h>
 
 #define MAX_CLIENT 10
 
@@ -41,10 +42,19 @@ int main(int argc, char *argv[]){
 		//todo error
 		return -1;
 	}
-
+	//init the struct sockaddr_in
 	memset(&sa, 0, sizeof(struct sockaddr));//todo check if memset can fail
-	sa.sin_family= (sinfamily_t)h->h_addrtype;
-	memcpy(&sa.sin_addr, hp->h_addr, hp->h_length);
+	sa.sin_family= (sa_family_t)h->h_addrtype;
+	memcpy(&sa.sin_addr, h->h_addr, h->h_length);
+	unsigned short portnum = (unsigned short)h->h_name;
+	sa.sin_port= htons(portnum);
+
+	//bind the main server socket
+	if (bind(sockFD , (struct sockaddr *)&sa , sizeof(struct sockaddr_in)) < 0) {
+		close(sockFD);
+		return(-1);
+	}
+
 	return 0;
 
 }

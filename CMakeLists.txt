@@ -3,5 +3,5 @@ project(os_ex4)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wextra -Wall ")
 
-set(SOURCE_FILES whatappServer.cpp)
+set(SOURCE_FILES whatsappServer.cpp)
 add_executable(os_ex4 ${SOURCE_FILES})
