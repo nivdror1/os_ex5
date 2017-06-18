@@ -6,6 +6,7 @@
 #include <cstring>
 #include <zconf.h>
 #include <iostream>
+#include <algorithm>
 
 #define MAX_CLIENTS 10
 #define WELCOME_SOCKET "$welcomeSocket"
@@ -51,6 +52,13 @@ void init(int welcomeSocket, char* port){
  */
 int finalizer(){
 	FD_ZERO(&listeningFds);
+	//close all socket fd's
+	for (auto iter = sockIdentifier.begin(); iter!= sockIdentifier.end(); ++iter){
+		if(close((*iter).second)==-1){
+			//todo error
+		}
+	}
+	//clear the maps
 	sockIdentifier.clear();
 	groupMembers.clear();
 	clientsToGroups.clear();
@@ -87,10 +95,10 @@ void sendConnectionMessage(int newSocket, void* name){
 		//output server
 		std::cout<< clientName<<" connected."<<std::endl;
 		//send a message to the client
-		message = "Connected successfully";
+		message = "Connected successfully.\n";
 
 	}else{
-		message = "Connected Failed";
+		message = "Client is already in use.\n";
 	}
 	sendMessageToClient(newSocket, message);
 }
@@ -109,6 +117,9 @@ void connectNewClient(){
 	}
 	//read the message
 	if(read(newSocket,clientName,MAX_CHAR_CLIENT_NAME)< 0){
+		//send to the client that he didn't connect to the client
+		sendMessageToClient( newSocket,"Failed to connect the server\n");
+		return;
 		//todo error
 	}
 	//send a message whether the connection has succeed
@@ -120,7 +131,6 @@ void connectNewClient(){
  */
 void exitServer(){
 	finalizer();
-	//todo maybe close all of the fd
 	std::cout<<"EXIT command is typed: server is shutting down"<<std::endl;
 	exit(0);
 }
@@ -130,15 +140,23 @@ void exitServer(){
  * @param clientName the client name requested it
  */
 void sendConnectedClients(std::string clientName){
-	//todo you haven't sorted the client list, and how does a list of all of the user connected
-	//todo can be empty? do we need to return list without the client requesting it?
+
+	//append all client to a string
 	std::string sortedClients;
 	for (auto iter = sockIdentifier.begin(); iter != sockIdentifier.end(); ++iter)
 	{
-		sortedClients.append(iter->first + ",");
+		// do not append the client name to the string of sorted clients
+		if(clientName != (*iter).first ) {
+			sortedClients.append(iter->first + ",");
+		}
 	}
+	sortedClients.erase(sortedClients.size()-1,1); //remove the final comma
 	sortedClients.append("\n");
-	sendMessageToClient(sockIdentifier.at(clientName), sortedClients.substr(0, sortedClients.size()-1)); // erase last comma
+	//send a message to the client containing the clients
+	sendMessageToClient(sockIdentifier.at(clientName), sortedClients);
+
+	//output server
+	std::cout<< clientName + ": Requests the currently connected client names.\n";
 
 }
 
@@ -157,8 +175,34 @@ void removeClient(std::string clientName){
 	}
 	//erase from the clientToGroups map
 	clientsToGroups.erase(clientName);
-	//todo send a message to the client
 
+	// send a message to the client
+	sendMessageToClient(sockIdentifier.at(clientName),"Unregistered successfully.\n");
+	//output server
+	std::cout<< clientName + ": Unregistered successfully.\n";
+
+	if(close (sockIdentifier.at(clientName))== -1){
+		//todo error
+	}
+	sockIdentifier.erase(clientName);
+
+}
+
+/**
+ * create a new group
+ * @param clientName the client name
+ * @param message
+ */
+void createNewGroup(std::string clientName, std::string message){
+	//getting the group name
+	auto groupNameIndex = message.find_first_of(" ");
+	std::string groupName = message.substr(0, groupNameIndex);
+	std::string restOfMessage = message.substr(groupNameIndex, std::string::npos);
+
+	//check if the group name already exists
+	if(groupMembers.find(groupName)!= std::string::npos){
+
+	}
 }
 
 /**
