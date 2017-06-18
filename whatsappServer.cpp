@@ -7,6 +7,9 @@
 #include <zconf.h>
 #include <iostream>
 #include <algorithm>
+#include <sstream>
+#include <vector>
+#include <set>
 
 #define MAX_CLIENTS 10
 #define WELCOME_SOCKET "$welcomeSocket"
@@ -17,7 +20,7 @@
 std::map<std::string, int> sockIdentifier;
 
 /** a map from a group name to a vector of client names in matched group. */
-std::map<std::string , std::vector<std::string>> groupMembers;
+std::map<std::string , std::set<std::string>> groupNameToClients;
 
 /** a map from client name to a vector of groups that the client is a part of them.*/
 std::map<std::string , std::vector<std::string>> clientsToGroups;
@@ -60,7 +63,7 @@ int finalizer(){
 	}
 	//clear the maps
 	sockIdentifier.clear();
-	groupMembers.clear();
+	groupNameToClients.clear();
 	clientsToGroups.clear();
 	//todo delete sockaddr_in sa
 	return 0;
@@ -169,7 +172,7 @@ void removeClient(std::string clientName){
 	auto groupsNames = clientsToGroups.at(clientName);
 	//for each group erase the client name from group member map
 	for(unsigned int i = 0;i<groupsNames.size(); i++) {
-		auto curIter = groupMembers.find(groupsNames.at(i));
+		auto curIter = groupNameToClients.find(groupsNames.at(i));
 		std::vector curGroup = (*curIter).second;
 		curGroup.erase( std::find(curGroup.begin(),curGroup.end(),clientName));
 	}
@@ -188,21 +191,66 @@ void removeClient(std::string clientName){
 
 }
 
+std::vector<std::string> split(const std::string &text, char delim) {
+	std::stringstream textStream(text);
+	std::string item;
+	std::vector<std::string> tokens;
+	while (getline(textStream, item, delim)) {
+		tokens.push_back(item);
+	}
+	return tokens;
+}
+
 /**
  * create a new group
  * @param clientName the client name
  * @param message
  */
-void createNewGroup(std::string clientName, std::string message){
+void createNewGroup(std::string &clientName, std::vector &groupNameAndMembers){
 	//getting the group name
-	auto groupNameIndex = message.find_first_of(" ");
-	std::string groupName = message.substr(0, groupNameIndex);
-	std::string restOfMessage = message.substr(groupNameIndex, std::string::npos);
+	std::string groupName = groupNameAndMembers.at(1);
 
 	//check if the group name already exists
-	if(groupMembers.find(groupName)!= std::string::npos){
+	if(groupNameToClients.find(groupName) != groupNameToClients.end()){
+		sendMessageToClient(sockIdentifier.at(clientName), "ERROR: failed to create group \"" + groupName + "\".\n");
+		std::cout << clientName + ": ERROR: failed to create group \"" + groupName + "\".\n";
+		return;
+	}
+	//erase the command and group name from the vector
+	groupNameAndMembers.erase(groupNameAndMembers.begin(),groupNameAndMembers.begin()+1);
+
+	//define iterators
+	auto begin = groupNameAndMembers.begin();
+	auto end = groupNameAndMembers.end();
+
+	if(groupNameAndMembers.size() == 0 ||
+			(groupNameAndMembers.size() == 1 && std::find(begin,end,clientName)!= groupNameAndMembers.end())){
+		sendMessageToClient(sockIdentifier.at(clientName), "ERROR: failed to create group \"" + groupName + "\".\n");
+		std::cout << clientName + ": ERROR: failed to create group \"" + groupName + "\".\n";
+		return;
+	}
+	std::set clientSet;
+	for( auto iter= begin; iter != end;++iter){
+
+		//check if the client exists if not error!!!
+		if(sockIdentifier.find(*iter)== sockIdentifier.end()){
+			sendMessageToClient(sockIdentifier.at(clientName), "ERROR: failed to create group \"" + groupName + "\".\n");
+			std::cout << clientName + ": ERROR: failed to create group \"" + groupName + "\".\n";
+			return;
+		}
+		//insert to the client set
+		clientSet.insert((*iter));
 
 	}
+	//add the client name (the sender)
+	clientSet.insert(clientName);
+
+	groupNameToClients[groupName]= clientSet;
+
+	//todo add to clientToGroup map
+
+
+
 }
 
 /**
@@ -211,13 +259,14 @@ void createNewGroup(std::string clientName, std::string message){
  * @param message the message recieved from the client
  */
 void parseAndExec(std::string clientName, std::string message){
-	auto commandEndIndex = message.find_first_of(" ");
-	std::string command = message.substr(0, commandEndIndex);
-	std::string restOfMessage = message.substr(commandEndIndex, std::string::npos);
+	auto splitMessage = split(message, ' ');
+
+
+	std::string command = splitMessage.at(0);
 	if (command == "create_group"){
-		createNewGroup(clientName, restOfMessage);
+		createNewGroup(clientName, splitMessage);
 	} else if (command == "send"){
-		sendMessage(clientName, restOfMessage);
+		sendMessage(clientName, splitMessage);
 	} else if (command == "who"){
 		sendConnectedClients(clientName);
 	} else {
