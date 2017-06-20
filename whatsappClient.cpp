@@ -18,49 +18,56 @@ fd_set listeningFds;
 
 struct sockaddr_in sa;
 
+std::string nickname;
+
+std::vector<std::string> split(const std::string &text, char delim, int counter) {
+    std::stringstream textStream(text);
+    std::string item;
+    std::vector<std::string> tokens;
+    unsigned int remainingMessageIndex = 0;
+    while (getline(textStream, item, delim)) {
+        tokens.push_back(item);
+        remainingMessageIndex += (item.size() + 1);
+        counter--;
+        if(counter == 0){
+            break;
+        }
+    }
+    tokens.push_back(text.substr(remainingMessageIndex));
+    return tokens;
+}
+
+bool isAlphaNumeric(std::string &name){
+    auto compare = [](char c) { return !(isalnum(c)); };
+    return std::find_if(name.begin(), name.end(),compare) == name.end();
+}
 
 /**
  * init
  */
-void init(int clientSocket, char* address,char* port){
+void init(int clientSocket, char* argv[]){
 	//initiate the fd set listeningFd
 	FD_ZERO(&listeningFds);
 	FD_SET(clientSocket,&listeningFds);
 	FD_SET(STDIN_FILENO,&listeningFds);
 
+    nickname = argv[1];
+    if (!isAlphaNumeric(nickname)){
+        // todo usage error
+    }
+
 	//init the struct sockaddr_in
 	memset(&sa, 0, sizeof(struct sockaddr_in));//todo check if memset can fail
 	sa.sin_family= AF_INET;
-	sa.sin_addr.s_addr = inet_addr(address);
-	unsigned short portnum = (unsigned short)atoi(port);
+	sa.sin_addr.s_addr = inet_addr(argv[2]);
+	unsigned short portnum = (unsigned short)atoi(argv[3]);
 	sa.sin_port = htons(portnum);
-}
-
-std::vector<std::string> split(const std::string &text, char delim, int counter) {
-	std::stringstream textStream(text);
-	std::string item;
-	std::vector<std::string> tokens;
-	unsigned int remainingMessageIndex = 0;
-	while (getline(textStream, item, delim)) {
-		tokens.push_back(item);
-		remainingMessageIndex += (item.size() + 1);
-		counter--;
-		if(counter == 0){
-			break;
-		}
-	}
-	tokens.push_back(text.substr(remainingMessageIndex));
-	return tokens;
-}
-
-bool isAlphaNumeric(std::string &name){
-	auto compare = [](char c) { return !(isalnum(c)); };
-	return std::find_if(name.begin(), name.end(),compare) == name.end();
 }
 
 std::string parseCreateGroup(std::string &message){
 
 	std::vector<std::string> splitMessage = split(message, ' ', 2);
+    // if splitMessage.size() > 2 then there is at least 3 spaces and that is format error
 	if (splitMessage.size() > 2){
 		// todo usage error
 	}
@@ -69,11 +76,13 @@ std::string parseCreateGroup(std::string &message){
 	if (!isAlphaNumeric(groupName)){
 		//todo usage error
 	}
-	std::vector<std::string> groupMembers = split(message, ',', 30);
+	std::vector<std::string> groupMembers = split(splitMessage.at(1), ',', 30);
+    // if groupMembers.size() > 30 then there is more than 30 group members and that is format error
 	if (groupMembers.size() > 30){
 		// todo usage error
 	}
-	if (std::find_if(groupMembers.begin(), groupMembers.end(),isAlphaNumeric) != groupMembers.end()){
+	if (std::find_if(groupMembers.begin(), groupMembers.end(),!isAlphaNumeric) != groupMembers
+                                                                                          .end()){
 		// todo usage error
 	}
 	std::string groupMembersWithSpaces;
@@ -84,24 +93,41 @@ std::string parseCreateGroup(std::string &message){
 	return groupMembersWithSpaces;
 }
 
-void handleRequestFromUser(){
+std::string parseSendCommand(std::string &message){
+    std::vector<std::string> splitMessage = split(message, ' ', 1);
+    // if splitMessage.size() <= 1 then receiver name or the actual message is missing
+    if (splitMessage.size() <= 1){
+        // todo usage error
+    }
+    std::string receiverName = splitMessage.at(0);
+
+    if (!isAlphaNumeric(receiverName) || receiverName == nickname){
+        //todo usage error
+    }
+    return splitMessage.at(1);
+}
+
+void handleRequestFromUser(int clientSocket){
 	char buf[MAX_CHAR];
 	if (read(STDIN_FILENO, buf, MAX_CHAR) < 0){
 		//todo error
 	}
 	std::vector<std::string> splitMessage = split(buf, ' ', 1);
-	std::string messageToServer;
-	if(splitMessage.at(0) == "create_group"){
-		messageToServer = parseCreateGroup(splitMessage.at(1));
+    std::string messageToServer = splitMessage.at(0);
+    if(splitMessage.at(0) == "create_group"){
+		messageToServer += " " + parseCreateGroup(splitMessage.at(1));
 	}else if(splitMessage.at(0) == "send"){
-
-	}else if(splitMessage.at(0) == "who"){
-
-	}else if(splitMessage.at(0) == "exit") {
-
+        messageToServer += " " + parseSendCommand(splitMessage.at(1));
+	}else if(splitMessage.at(0) == "who" || splitMessage.at(0) == "exit"){
+        if (splitMessage.size() != 1){
+            // todo usage error
+        }
 	}else{
 		//todo usage error
 	}
+    if(send(clientSocket,messageToServer.c_str(),messageToServer.size(),0) != (ssize_t)messageToServer.size()){
+        //todo error
+    }
 }
 
 void getMessageFromServer(int clientSocket){
@@ -115,7 +141,7 @@ void getMessageFromServer(int clientSocket){
 
 void wakeUpClient(fd_set &readFds, int clientSocket){
 	if(FD_ISSET(STDIN_FILENO,&readFds)){
-		handleRequestFromUser();
+		handleRequestFromUser(clientSocket);
 	}else{
 		//receive and send messages from/to the client
 		getMessageFromServer(clientSocket);
@@ -134,8 +160,7 @@ int main(int argc, char *argv[]){
 		//todo error
 		return -1;
 	}
-
-	init(clientSocket,argv[2], argv[3]);
+	init(clientSocket,argv);
 	//connect to the main server socket
 	if (connect(clientSocket , (struct sockaddr *)&sa , sizeof(sa)) < 0) {
 		close(clientSocket );//todo error close can fail
