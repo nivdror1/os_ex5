@@ -1,0 +1,46 @@
+nivdror1, ido.shachar
+niv dror (305498198), Ido Shachar (311248355)
+EX: 4
+
+FILES:
+Block.cpp
+Block.h
+CacheAlgorithm.cpp
+CacheAlgorithm.h
+FBRAlgo.h
+FBRAlgo.cpp
+LRUAlgo.cpp
+LRUAlgo.h
+LFUAlgo.cpp
+LFUAlgo.h
+CacheFS.cpp
+CacheFile.h
+CacheFile.cpp
+README
+Answers.pdf
+Makefile
+
+REMARKS:
+Brief description of our code:
+In this exercise there are 2 major parts to take care of, the first part is the interface between
+the library and the clients and the second part is managing the cache.
+We've tried to separate those two part as much as we can, such that the job of the library is to
+manage the files and their file descriptors and to copy the information from the cache to user's
+buffer.
+The job of the parent class CacheAlgorithm is to check if needed blocks are in the cache and read
+information from them, where every subclass define his replacing policy in cases of cache hit or
+miss.
+The flow of the program is as follow:
+Open files - we open the files according to absolute path, meaning that if the user try to open a
+file that already open, we won't really open a new file. Instead, we return a fake file descriptor
+and add a pair of (fakeFD, realFD) to a map, where fakeFD is a counter that we made and realFD is
+the file descriptor that the open function return when we try to open this file for the first
+(and only) time. Any time a new pair like this add to the map we increase the reference counter of
+the CacheFile object that represent this file.
+Close files - in any call for close file we decrease the reference counter of this file and erase
+this (fakeFD, realFD) pair from the map. We actually close the file by his real file descriptor
+only if the reference counter turn into zero.
+Read from file - the library decide which block to read and how much to read from each block,
+when the CacheAlgorithm actually supply the information from the block (he knows only blocks, not
+ files) and update the cache properly.
+

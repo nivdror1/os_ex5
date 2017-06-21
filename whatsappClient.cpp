@@ -55,7 +55,8 @@ void init(int clientSocket, char* argv[]){
     if (isNotAlphaNumeric(nickname)){
         // todo usage error
     }
-    if (inet_pton(AF_INET, argv[2], NULL) == 0){
+    unsigned char buf[sizeof(struct in6_addr)];
+    if (inet_pton(AF_INET, argv[2], buf) == 0){
         // todo usage error (not an IP address)
     }
 
@@ -136,7 +137,7 @@ void handleRequestFromUser(int clientSocket){
 void checkIfShouldTerminate(char* message){
     if (strcmp(message, "Client name is already in use.\n") == 0 ||
         strcmp(message, "Failed to connect the server") == 0){
-        std::cout << message;
+        std::cerr << message;
         exit(1);
     }
     if (strcmp(message, "Shut down server.\n") == 0){
@@ -185,7 +186,9 @@ int main(int argc, char *argv[]){
 		close(clientSocket );//todo error close can fail
 		return(-1);
 	}
-
+    if(send(clientSocket, argv[1],strlen(argv[1]) + 1,0) != (ssize_t)strlen(argv[1]) + 1){
+        //todo error
+    }
 	int ready = 0;
 	while(true){
 		fd_set readFds = listeningFds;

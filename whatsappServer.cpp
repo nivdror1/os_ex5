@@ -79,7 +79,7 @@ void sendConnectionMessage(int newSocket, void* name){
 	if(searchClientName == sockIdentifier.end()){
 		sockIdentifier[clientName] = newSocket;
 		//output server
-		std::cout<< clientName<<" connected."<<std::endl;
+		std::cout<< clientName << " connected."<<std::endl;
 		//send a message to the client
 		message = "Connected successfully.\n";
 
@@ -391,7 +391,7 @@ void wakeUpServer(fd_set &readFds, int ready, int welcomeSocket){
 	}
 	//exit the server
 	if(FD_ISSET(STDIN_FILENO,&readFds)){
-		exitServer(welcomeSocket);
+		exitServer();
 	}else{
 		//receive and send messages from/to the client
 		handleClientRequest(ready, readFds);
