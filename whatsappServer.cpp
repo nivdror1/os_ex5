@@ -84,7 +84,7 @@ void sendConnectionMessage(int newSocket, void* name){
 		message = "Connected successfully.\n";
 
 	}else{
-		message = "Client is already in use.\n";
+		message = "Client name is already in use.\n";
 	}
 	sendMessageToClient(newSocket, message);
 }
@@ -108,7 +108,7 @@ void connectNewClient(){
 	//read the message
 	if(read(newSocket,clientName,MAX_CHAR_CLIENT_NAME)< 0){
 		//send to the client that he didn't connect to the client
-		sendMessageToClient( newSocket,"Failed to connect the server\n");
+		sendMessageToClient( newSocket,"Failed to connect the server");
 		return;
 		//todo error
 	}
@@ -118,9 +118,8 @@ void connectNewClient(){
 
 /**
  * exit the server when the server has recieved an exit command
- * @param welcomeSocket the fd of the listening socket
  */
-void exitServer(int welcomeSocket){
+void exitServer(){
 	char buf[MAX_CHAR];
 	if (read(STDIN_FILENO, buf, MAX_CHAR) < 0){
 		//todo error
@@ -132,6 +131,7 @@ void exitServer(int welcomeSocket){
 	FD_ZERO(&listeningFds);
 	//close all socket fd's
 	for (auto iter = sockIdentifier.begin(); iter!= sockIdentifier.end(); ++iter){
+        sendMessageToClient((*iter).second, "Shut down server.\n");
 		if(close((*iter).second)==-1){
 			//todo error
 		}

@@ -37,9 +37,9 @@ std::vector<std::string> split(const std::string &text, char delim, int counter)
     return tokens;
 }
 
-bool isAlphaNumeric(std::string &name){
+bool isNotAlphaNumeric(std::string &name){
     auto compare = [](char c) { return !(isalnum(c)); };
-    return std::find_if(name.begin(), name.end(),compare) == name.end();
+    return std::find_if(name.begin(), name.end(),compare) != name.end();
 }
 
 /**
@@ -52,8 +52,11 @@ void init(int clientSocket, char* argv[]){
 	FD_SET(STDIN_FILENO,&listeningFds);
 
     nickname = argv[1];
-    if (!isAlphaNumeric(nickname)){
+    if (isNotAlphaNumeric(nickname)){
         // todo usage error
+    }
+    if (inet_pton(AF_INET, argv[2], NULL) == 0){
+        // todo usage error (not an IP address)
     }
 
 	//init the struct sockaddr_in
@@ -73,7 +76,7 @@ std::string parseCreateGroup(std::string &message){
 	}
 	std::string groupName = splitMessage.at(0);
 
-	if (!isAlphaNumeric(groupName)){
+	if (isNotAlphaNumeric(groupName)){
 		//todo usage error
 	}
 	std::vector<std::string> groupMembers = split(splitMessage.at(1), ',', 30);
@@ -81,7 +84,7 @@ std::string parseCreateGroup(std::string &message){
 	if (groupMembers.size() > 30){
 		// todo usage error
 	}
-	if (std::find_if(groupMembers.begin(), groupMembers.end(),!isAlphaNumeric) != groupMembers
+	if (std::find_if(groupMembers.begin(), groupMembers.end(),isNotAlphaNumeric) != groupMembers
                                                                                           .end()){
 		// todo usage error
 	}
@@ -101,7 +104,7 @@ std::string parseSendCommand(std::string &message){
     }
     std::string receiverName = splitMessage.at(0);
 
-    if (!isAlphaNumeric(receiverName) || receiverName == nickname){
+    if (isNotAlphaNumeric(receiverName) || receiverName == nickname){
         //todo usage error
     }
     return splitMessage.at(1);
@@ -130,12 +133,28 @@ void handleRequestFromUser(int clientSocket){
     }
 }
 
+void checkIfShouldTerminate(char* message){
+    if (strcmp(message, "Client name is already in use.\n") == 0 ||
+        strcmp(message, "Failed to connect the server") == 0){
+        std::cout << message;
+        exit(1);
+    }
+    if (strcmp(message, "Shut down server.\n") == 0){
+        exit(1);
+    }
+    if (strcmp(message, "Unregistered successfully.\n") == 0){
+        std::cout << message;
+        exit(0);
+    }
+}
+
 void getMessageFromServer(int clientSocket){
 	char buf[400];
 	memset(buf, '0', sizeof(buf));
 	if(read(clientSocket, buf, MAX_CHAR)< 0){
 		//todo error
 	}
+    checkIfShouldTerminate(buf);
 	std::cout << buf;
 }
 
