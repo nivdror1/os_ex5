@@ -74,8 +74,8 @@ void init(int clientSocket, char* argv[]){
 std::string parseCreateGroup(std::string &message){
 
 	std::vector<std::string> splitMessage = split(message, ' ', 2);
-    // if splitMessage.size() > 2 then there is at least 3 spaces and that is format error
-	if (splitMessage.size() > 2){
+    // if splitMessage.size() == 2 that is format error
+	if (splitMessage.size() != 2){
 		// todo usage error
 	}
 	std::string groupName = splitMessage.at(0);
@@ -88,8 +88,7 @@ std::string parseCreateGroup(std::string &message){
 	if (groupMembers.size() > 30){
 		// todo usage error
 	}
-	if (std::find_if(groupMembers.begin(), groupMembers.end(),isNotAlphaNumeric) != groupMembers
-                                                                                          .end()){
+	if (std::find_if(groupMembers.begin(), groupMembers.end(),isNotAlphaNumeric) != groupMembers.end()){
 		// todo usage error
 	}
 	std::string groupMembersWithSpaces;
@@ -97,7 +96,7 @@ std::string parseCreateGroup(std::string &message){
 		groupMembersWithSpaces += groupMembers.at(i) + " ";
 	}
 	groupMembersWithSpaces += groupMembers.at(groupMembers.size()-1);
-	return groupMembersWithSpaces;
+	return groupName + " " + groupMembersWithSpaces;
 }
 
 std::string parseSendCommand(std::string &message){
@@ -111,7 +110,7 @@ std::string parseSendCommand(std::string &message){
     if (isNotAlphaNumeric(receiverName) || receiverName == nickname){
         //todo usage error
     }
-    return splitMessage.at(1);
+    return receiverName + " " + splitMessage.at(1);
 }
 
 void handleRequestFromUser(int clientSocket){
@@ -120,12 +119,20 @@ void handleRequestFromUser(int clientSocket){
 		//todo error
 	}
 	std::vector<std::string> splitMessage = split(buf, ' ', 1);
-    std::string messageToServer = splitMessage.at(0);
+	auto found = splitMessage.at(0).find_first_of("\n");
+//	if(found!= std::string::npos){
+//		splitMessage.at(0) = splitMessage.at(0).substr(0, found);
+//	}
+	std::string messageToServer = splitMessage.at(0);
     if(splitMessage.at(0) == "create_group"){
-		messageToServer += " " + parseCreateGroup(splitMessage.at(1));
+	    size_t messageLength = splitMessage.at(1).find_last_of("\n");
+	    std::string messageWithoutEndl = splitMessage.at(1).substr(0, messageLength);
+		messageToServer += " " + parseCreateGroup(messageWithoutEndl);
 	}else if(splitMessage.at(0) == "send"){
-        messageToServer += " " + parseSendCommand(splitMessage.at(1));
-	}else if(splitMessage.at(0) == "who\n" || splitMessage.at(0) == "exit\n"){
+	    size_t messageLength = splitMessage.at(1).find_last_of("\n");
+	    std::string messageWithoutEndl = splitMessage.at(1).substr(0, messageLength);
+        messageToServer += " " + parseSendCommand(messageWithoutEndl);
+	}else if(splitMessage.at(0).substr(0,found) == "who" || splitMessage.at(0).substr(0,found) == "exit"){
         if (splitMessage.size() != 1){
             // todo usage error
         }
@@ -137,9 +144,9 @@ void handleRequestFromUser(int clientSocket){
     }
 }
 
-void checkIfShouldTerminate(char* message){
+void checkIfShouldTerminate(const char* message){
     if (strcmp(message, "Client name is already in use.\n") == 0 ||
-        strcmp(message, "Failed to connect the server") == 0){
+        strcmp(message, "Failed to connect the server.\n") == 0){
         std::cerr << message;
         exit(1);
     }
@@ -155,11 +162,15 @@ void checkIfShouldTerminate(char* message){
 void getMessageFromServer(int clientSocket){
 	char buf[400];
 	memset(buf, '0', sizeof(buf));
-	if(read(clientSocket, buf, MAX_CHAR)< 0){
+	ssize_t numberOfBytesRead = read(clientSocket, buf, MAX_CHAR);
+	if(numberOfBytesRead < 0){
 		//todo error
 	}
-    checkIfShouldTerminate(buf);
-	std::cout << buf;
+	std::string text = buf;
+	text = text.substr(0,(size_t)numberOfBytesRead);
+    checkIfShouldTerminate(text.c_str());
+
+	std::cout << text;
 }
 
 void wakeUpClient(fd_set &readFds, int clientSocket){

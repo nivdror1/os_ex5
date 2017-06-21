@@ -30,6 +30,25 @@ fd_set listeningFds;
 
 struct sockaddr_in sa;
 
+std::vector<std::string> split(const std::string &text, char delim, int counter) {
+	std::stringstream textStream(text);
+	std::string item;
+	std::vector<std::string> tokens;
+	unsigned int remainingMessageIndex = 0;
+	while (getline(textStream, item, delim)) {
+		tokens.push_back(item);
+		remainingMessageIndex += (item.size() + 1);
+		counter--;
+		if(counter == 0){
+			break;
+		}
+	}
+	if(remainingMessageIndex < text.size()){
+		tokens.push_back(text.substr(remainingMessageIndex));
+	}
+
+	return tokens;
+}
 
 /**
  * init
@@ -78,6 +97,8 @@ void sendConnectionMessage(int newSocket, void* name){
 	//in case the client name isn't in the map , add it
 	if(searchClientName == sockIdentifier.end()){
 		sockIdentifier[clientName] = newSocket;
+		std::vector<std::string> groupName;
+		clientsToGroups[clientName]= groupName;
 		//output server
 		std::cout<< clientName << " connected."<<std::endl;
 		//send a message to the client
@@ -108,7 +129,7 @@ void connectNewClient(){
 	//read the message
 	if(read(newSocket,clientName,MAX_CHAR_CLIENT_NAME)< 0){
 		//send to the client that he didn't connect to the client
-		sendMessageToClient( newSocket,"Failed to connect the server");
+		sendMessageToClient( newSocket,"Failed to connect the server.\n");
 		return;
 		//todo error
 	}
@@ -157,7 +178,7 @@ void sendConnectedClients(std::string clientName){
 	for (auto iter = sockIdentifier.begin(); iter != sockIdentifier.end(); ++iter)
 	{
 		// do not append the client name to the string of sorted clients
-		if(clientName != (*iter).first ) {
+		if(clientName != (*iter).first &&  WELCOME_SOCKET != (*iter).first) {
 			sortedClients.append(iter->first + ",");
 		}
 	}
@@ -177,15 +198,20 @@ void sendConnectedClients(std::string clientName){
  */
 void removeClient(std::string clientName){
 	//get all of the groups the said client name appear in them
-	auto groupsNames = clientsToGroups.at(clientName);
-	//for each group erase the client name from group member map
-	for(unsigned int i = 0;i<groupsNames.size(); i++) {
-		auto curIter = groupNameToClients.find(groupsNames.at(i));
-		std::set<std::string> curGroup = (*curIter).second;
-		curGroup.erase( std::find(curGroup.begin(),curGroup.end(),clientName));
+	auto groupsNamesIter = clientsToGroups.find(clientName);
+	if(groupsNamesIter !=clientsToGroups.end()) {
+
+		std::vector<std::string> groupNamesVec = (*groupsNamesIter).second;
+		//for each group erase the client name from group member map
+		for (unsigned int i = 0; i < groupNamesVec.size(); i++) {
+			auto curIter = groupNameToClients.find(groupNamesVec.at(i));
+			std::set<std::string> curGroup = (*curIter).second;
+			curGroup.erase(std::find(curGroup.begin(), curGroup.end(), clientName));
+		}
+		//erase from the clientToGroups map
+		clientsToGroups.erase(clientName);
 	}
-	//erase from the clientToGroups map
-	clientsToGroups.erase(clientName);
+
 
 	// send a message to the client
 	sendMessageToClient(sockIdentifier.at(clientName),"Unregistered successfully.\n");
@@ -197,16 +223,6 @@ void removeClient(std::string clientName){
 	}
 	sockIdentifier.erase(clientName);
 
-}
-
-std::vector<std::string> split(const std::string &text, char delim) {
-	std::stringstream textStream(text);
-	std::string item;
-	std::vector<std::string> tokens;
-	while (getline(textStream, item, delim)) {
-		tokens.push_back(item);
-	}
-	return tokens;
 }
 
 /**
@@ -226,11 +242,11 @@ std::vector<std::string> split(const std::string &text, char delim) {
  * @param groupNameAndMembers a vector containing the group name and client name
  */
 std::set<std::string> checkIfTheClientsExists(std::string  &clientName,
-                                              std::string &groupName, std::vector<std::string> &groupNameAndMembers){
+                                              std::string &groupName, std::vector<std::string> &groupMembers){
 	std::set<std::string> clientSet;
 	//define iterators
-	auto begin = groupNameAndMembers.begin();
-	auto end = groupNameAndMembers.end();
+	auto begin = groupMembers.begin();
+	auto end = groupMembers.end();
 	for( auto iter= begin; iter != end;++iter){
 
 		//check if the client exists if not send an error!!!
@@ -254,9 +270,10 @@ std::set<std::string> checkIfTheClientsExists(std::string  &clientName,
  * @param clientName the client name whom send the message
  * @param groupNameAndMembers a vector containing the group name and client name
  */
-void createNewGroup(std::string &clientName, std::vector<std::string> &groupNameAndMembers){
+void createNewGroup(std::string &clientName, std::string &groupNameAndMembers){
+	auto splitGroupNameAndMembers = split(groupNameAndMembers, ' ', 30);
 	//getting the group name
-	std::string groupName = groupNameAndMembers.at(1);
+	std::string groupName = splitGroupNameAndMembers.at(0);
 
 	//check if the group name already exists
 	if(groupNameToClients.find(groupName) != groupNameToClients.end()){
@@ -264,19 +281,15 @@ void createNewGroup(std::string &clientName, std::vector<std::string> &groupName
 		return;
 	}
 	//erase the command and group name from the vector
-	groupNameAndMembers.erase(groupNameAndMembers.begin(),groupNameAndMembers.begin()+1);
+	splitGroupNameAndMembers.erase(splitGroupNameAndMembers.begin());
 
-	//define iterators
-	auto begin = groupNameAndMembers.begin();
-	auto end = groupNameAndMembers.end();
-
-	if(groupNameAndMembers.size() == 0 ||
-			(groupNameAndMembers.size() == 1 && std::find(begin,end,clientName)!= groupNameAndMembers.end())){
+	if(splitGroupNameAndMembers.size() == 0 ||
+			(splitGroupNameAndMembers.size() == 1 && splitGroupNameAndMembers.at(0) == clientName)){
 		createGroupErrorMessage(clientName, groupName); //output the error message
 		return;
 	}
 	//check if the clients exists and insert them to the set
-	std::set<std::string> clientSet = checkIfTheClientsExists(clientName,groupName, groupNameAndMembers);
+	std::set<std::string> clientSet = checkIfTheClientsExists(clientName,groupName, splitGroupNameAndMembers);
 	if(clientSet.size() == 0){
 		return;
 	}
@@ -289,40 +302,39 @@ void createNewGroup(std::string &clientName, std::vector<std::string> &groupName
 	}
 
 	//output a success message
-	sendMessageToClient(sockIdentifier.at(clientName), "Group \""+groupName+"\" was created successfully.\n" );
-	std::cout<< clientName+ ": Group \""+groupName+"\" was created successfully.\n";
-
-
-
+	sendMessageToClient(sockIdentifier.at(clientName), "Group \"" + groupName + "\" was created successfully.\n" );
+	std::cout<< clientName + ": Group \"" + groupName+"\" was created successfully.\n";
 
 }
 
-void sendMessage(std::string &senderName, std::vector<std::string> &splitMessage){
-	std::string receiverName = splitMessage.at(1);
+void sendMessage(std::string &senderName, std::string &splitMessage){
+	auto receiverAndMessage = split(splitMessage, ' ', 1);
+	std::string receiverName = receiverAndMessage.at(0);
 	//decipher the message
 	std::string text = senderName +": ";
-	std::string message ;
-	for(unsigned int i=2;i<splitMessage.size(); i++){
-		message+= splitMessage.at(i);
-	}
+	std::string message = receiverAndMessage.at(1);
+
 	//check if the receiver name is a client then send the message only to him
 	if(sockIdentifier.find(receiverName) != sockIdentifier.end()){
-		std::cout<<"Sent successfully.\n";
-		sendMessageToClient(sockIdentifier.at(receiverName),text+ message);
+		sendMessageToClient(sockIdentifier.at(receiverName),text+ message+"\n");
+		sendMessageToClient(sockIdentifier.at(senderName), "Sent successfully.\n");
+		std::cout<<text + "\"" + message + "\" was sent successfully to " + receiverName + ".\n";
 	}
+
 	//check if the receiver name is a group then send the message only to the group user's
 	//without sending it the to sender client
 	else if(groupNameToClients.find(receiverName) != groupNameToClients.end()){
 		std::set<std::string> groupUsers = groupNameToClients.at(receiverName) ;
 		for (auto iter= groupUsers.begin(); iter != groupUsers.end();++iter){
 			if((*iter) != senderName){
-				sendMessageToClient(sockIdentifier.at((*iter)),text+ message);
+				sendMessageToClient(sockIdentifier.at((*iter)),text+ message + "\n");
 			}
 		}
-		std::cout<<"Sent successfully.\n";
+		sendMessageToClient(sockIdentifier.at(senderName), "Sent successfully.\n");
+		std::cout<<text + "\"" + message + "\" was sent successfully to " + receiverName + ".\n";
 	}else{
 		sendMessageToClient(sockIdentifier.at(senderName), "ERROR: failed to send.\n");
-		std::cout<< senderName+ ": ERROR: failed to send \""+message+"\" to "+ receiverName+ ".\n";
+		std::cout<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ".\n";
 	}
 
 
@@ -334,15 +346,16 @@ void sendMessage(std::string &senderName, std::vector<std::string> &splitMessage
  * @param message the message recieved from the client
  */
 void parseAndExec(std::string clientName, std::string message){
-	auto splitMessage = split(message, ' ');
+	auto splitMessage = split(message, ' ', 1);
 
 
 	std::string command = splitMessage.at(0);
+	splitMessage.erase(splitMessage.begin());
 	if (command == "create_group"){
-		createNewGroup(clientName, splitMessage);
+		createNewGroup(clientName, splitMessage.at(0));
 	} else if (command == "send"){
-		sendMessage(clientName, splitMessage);
-	} else if (command == "who"){
+		sendMessage(clientName, splitMessage.at(0));
+	} else if (command.substr(0,3) == "who"){
 		sendConnectedClients(clientName);
 	} else {
 		removeClient(clientName);
@@ -361,9 +374,11 @@ void handleClientRequest(int ready,fd_set &readFds) {
 		//check if the fd is in the set and read from it
 		if (FD_ISSET((*iter).second,&readFds)){
 			memset(buf, '0', sizeof(buf));
-			if(read((*iter).second, buf, MAX_CHAR)< 0){
+			ssize_t numberOfBytesRead = read((*iter).second, buf, MAX_CHAR);
+			if(numberOfBytesRead < 0){
 				//todo error
 			}
+			buf[numberOfBytesRead] = '\0';
 			//parse the messages and executes them
 			parseAndExec((*iter).first, (char*)buf);
 			ready--;
