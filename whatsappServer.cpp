@@ -424,8 +424,13 @@ int main(int argc, char *argv[]){
 	}
 
 	while(true){
+		FD_ZERO(&listeningFds);
+		for(auto iter=  sockIdentifier.begin();iter!=sockIdentifier.end();++iter){
+			FD_SET((*iter).second,&listeningFds);
+		}
 		fd_set readFds = listeningFds;
 		int ready;
+
 		if((ready = select(FD_SETSIZE, &readFds, NULL, NULL,NULL))<0){
 			//todo error
 			return -1;

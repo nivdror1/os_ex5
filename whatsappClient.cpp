@@ -33,7 +33,10 @@ std::vector<std::string> split(const std::string &text, char delim, int counter)
             break;
         }
     }
-    tokens.push_back(text.substr(remainingMessageIndex));
+	if(remainingMessageIndex < text.size()){
+		tokens.push_back(text.substr(remainingMessageIndex));
+	}
+
     return tokens;
 }
 
@@ -122,7 +125,7 @@ void handleRequestFromUser(int clientSocket){
 		messageToServer += " " + parseCreateGroup(splitMessage.at(1));
 	}else if(splitMessage.at(0) == "send"){
         messageToServer += " " + parseSendCommand(splitMessage.at(1));
-	}else if(splitMessage.at(0) == "who" || splitMessage.at(0) == "exit"){
+	}else if(splitMessage.at(0) == "who\n" || splitMessage.at(0) == "exit\n"){
         if (splitMessage.size() != 1){
             // todo usage error
         }
@@ -192,7 +195,7 @@ int main(int argc, char *argv[]){
 	int ready = 0;
 	while(true){
 		fd_set readFds = listeningFds;
-		if((ready = select(2, &readFds, NULL, NULL,NULL))<0){
+		if((ready = select(clientSocket+1, &readFds, NULL, NULL,NULL))<0){
 			//todo error
 			return -1;
 		}
