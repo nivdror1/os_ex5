@@ -191,7 +191,7 @@ void sendConnectedClients(std::string clientName){
 	for (auto iter = sockIdentifier.begin(); iter != sockIdentifier.end(); ++iter)
 	{
 		// do not append the client name to the string of sorted clients
-		if(clientName != (*iter).first &&  WELCOME_SOCKET != (*iter).first) {
+		if( WELCOME_SOCKET != (*iter).first) {
 			sortedClients.append(iter->first + ",");
 		}
 	}
