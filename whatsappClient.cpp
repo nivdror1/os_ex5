@@ -155,10 +155,10 @@ void handleRequestFromUser(){
             return;
         }
     }else if(splitMessage.at(0).substr(0,found) == "exit"){
-            if (splitMessage.size() != 1){
-                std::cerr<< "ERROR: failed to exit.\n";
-                return;
-            }
+        if (splitMessage.size() != 1){
+            std::cerr<< "ERROR: failed to exit.\n";
+            return;
+        }
 	}else{
         std::cerr<< "ERROR: Invalid input.\n";
         return;
@@ -196,6 +196,7 @@ void getMessageFromServer(){
     //check if it's an error
     if(text.substr(0,5)=="ERROR"){
         std::cerr<<text.substr(0,(size_t)numberOfBytesRead);
+
     }
 	text = text.substr(0,(size_t)numberOfBytesRead);
     checkIfShouldTerminate(text.c_str());
