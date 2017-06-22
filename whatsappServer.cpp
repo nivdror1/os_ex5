@@ -248,7 +248,7 @@ void removeClient(std::string clientName){
  */
  void createGroupErrorMessage(std::string  &clientName, std::string &groupName){
 	 sendMessageToClient(sockIdentifier.at(clientName), "ERROR: failed to create group \"" + groupName + "\".\n");
-	 std::cout << clientName + ": ERROR: failed to create group \"" + groupName + "\".\n";
+	 std::cerr << clientName + ": ERROR: failed to create group \"" + groupName + "\".\n";
  }
 
 /**
@@ -323,7 +323,8 @@ void sendMessageToGroup(std::string &senderName, std::string &receiverName, std:
     std::set<std::string> groupUsers = groupNameToClients.at(receiverName) ;
     if (groupUsers.find(senderName) == groupUsers.end()){
         sendMessageToClient(sockIdentifier.at(senderName), "ERROR: failed to send.\n");
-        std::cout<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ".\n";
+        std::cerr<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ""
+                                                                                                       ".\n";
         return;
     }
     for (auto iter= groupUsers.begin(); iter != groupUsers.end();++iter){
@@ -355,7 +356,8 @@ void sendMessage(std::string &senderName, std::string &splitMessage){
         sendMessageToGroup(senderName, receiverName, text, message);
 	}else{
 		sendMessageToClient(sockIdentifier.at(senderName), "ERROR: failed to send.\n");
-		std::cout<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ".\n";
+		std::cerr<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ""
+                                                                                                       ".\n";
 	}
 
 

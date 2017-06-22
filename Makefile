@@ -1,6 +1,9 @@
 CPP= g++
 CPPFLAGS= -c -g -Wextra -Wvla -Wall -std=c++11 -DNDEBUG
 TAR_FILES= Makefile README whatsappClient.cpp whatsappServer.cpp
+TARGET= whatsappClient whatsappServer
+
+all:$(TARGET)
 
 #Exec Files
 whatsappClient: whatsappClient.o

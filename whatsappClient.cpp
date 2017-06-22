@@ -61,6 +61,7 @@ void init(char* argv[]){
         exit(1);
     }
     unsigned char buf[sizeof(struct in6_addr)];
+    memset(buf, '0', sizeof(buf));
     if (inet_pton(AF_INET, argv[2], buf) == 0){
         std::cerr<< "Failed to connect the server.\n";
         exit(1);
@@ -127,12 +128,16 @@ std::string parseSendCommand(std::string &message){
 
 void handleRequestFromUser(){
 	char buf[MAX_CHAR];
+    memset(buf, '0', sizeof(buf));
     std::string groupText,sendText;
-	if (read(STDIN_FILENO, buf, MAX_CHAR) < 0){
+    ssize_t numberOfBytes = read(STDIN_FILENO, buf, MAX_CHAR);
+	if (numberOfBytes < 0){
         std::cerr << "ERROR: read " << errno << ".\n";
         exit(1);
 	}
-	std::vector<std::string> splitMessage = split(buf, ' ', 1);
+    std::string buffString(buf);
+	std::vector<std::string> splitMessage = split((buffString.substr(0, (size_t)numberOfBytes))
+                                                          .c_str(), ' ', 1);
 	auto found = splitMessage.at(0).find_first_of("\n");
 	std::string messageToServer = splitMessage.at(0);
     if(splitMessage.at(0) == "create_group"){
@@ -196,7 +201,7 @@ void getMessageFromServer(){
     //check if it's an error
     if(text.substr(0,5)=="ERROR"){
         std::cerr<<text.substr(0,(size_t)numberOfBytesRead);
-
+        return;
     }
 	text = text.substr(0,(size_t)numberOfBytesRead);
     checkIfShouldTerminate(text.c_str());
