@@ -20,6 +20,8 @@ struct sockaddr_in sa;
 
 std::string nickname;
 
+int clientSocket;
+
 std::vector<std::string> split(const std::string &text, char delim, int counter) {
     std::stringstream textStream(text);
     std::string item;
@@ -48,7 +50,7 @@ bool isNotAlphaNumeric(std::string &name){
 /**
  * init
  */
-void init(int clientSocket, char* argv[]){
+void init(char* argv[]){
 	//initiate the fd set listeningFd
 	FD_ZERO(&listeningFds);
 	FD_SET(clientSocket,&listeningFds);
@@ -113,7 +115,7 @@ std::string parseSendCommand(std::string &message){
     return receiverName + " " + splitMessage.at(1);
 }
 
-void handleRequestFromUser(int clientSocket){
+void handleRequestFromUser(){
 	char buf[MAX_CHAR];
 	if (read(STDIN_FILENO, buf, MAX_CHAR) < 0){
 		//todo error
@@ -159,7 +161,7 @@ void checkIfShouldTerminate(const char* message){
     }
 }
 
-void getMessageFromServer(int clientSocket){
+void getMessageFromServer(){
 	char buf[400];
 	memset(buf, '0', sizeof(buf));
 	ssize_t numberOfBytesRead = read(clientSocket, buf, MAX_CHAR);
@@ -173,13 +175,23 @@ void getMessageFromServer(int clientSocket){
 	std::cout << text;
 }
 
-void wakeUpClient(fd_set &readFds, int clientSocket){
+void wakeUpClient(fd_set &readFds){
 	if(FD_ISSET(STDIN_FILENO,&readFds)){
-		handleRequestFromUser(clientSocket);
+		handleRequestFromUser();
 	}else{
 		//receive and send messages from/to the client
-		getMessageFromServer(clientSocket);
+		getMessageFromServer();
 	}
+}
+
+void connectToServer(char* clientName){
+	//connect to the main server socket
+	if (connect(clientSocket , (struct sockaddr *)&sa , sizeof(sa)) < 0) {
+		close(clientSocket );//todo error close can fail
+	}
+    if(send(clientSocket, clientName,strlen(clientName) + 1,0) != (ssize_t)strlen(clientName) + 1){
+        //todo error
+    }
 }
 
 int main(int argc, char *argv[]){
@@ -189,20 +201,12 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 	//create a new socket
-	int clientSocket = socket(AF_INET, SOCK_STREAM,0);
-	if(clientSocket == -1){
+	if((clientSocket = socket(AF_INET, SOCK_STREAM,0)) == -1){
 		//todo error
 		return -1;
 	}
-	init(clientSocket,argv);
-	//connect to the main server socket
-	if (connect(clientSocket , (struct sockaddr *)&sa , sizeof(sa)) < 0) {
-		close(clientSocket );//todo error close can fail
-		return(-1);
-	}
-    if(send(clientSocket, argv[1],strlen(argv[1]) + 1,0) != (ssize_t)strlen(argv[1]) + 1){
-        //todo error
-    }
+	init(argv);
+    connectToServer(argv[1]);
 	int ready = 0;
 	while(true){
 		fd_set readFds = listeningFds;
@@ -211,7 +215,7 @@ int main(int argc, char *argv[]){
 			return -1;
 		}
 		if(ready > 0){
-			wakeUpClient(readFds, clientSocket);
+			wakeUpClient(readFds);
 		}
 
 	}
