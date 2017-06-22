@@ -1,46 +1,61 @@
 nivdror1, ido.shachar
 niv dror (305498198), Ido Shachar (311248355)
-EX: 4
+EX: 5
 
 FILES:
-Block.cpp
-Block.h
-CacheAlgorithm.cpp
-CacheAlgorithm.h
-FBRAlgo.h
-FBRAlgo.cpp
-LRUAlgo.cpp
-LRUAlgo.h
-LFUAlgo.cpp
-LFUAlgo.h
-CacheFS.cpp
-CacheFile.h
-CacheFile.cpp
+whatsappClient.cpp
+whatsappServer.cpp
 README
-Answers.pdf
 Makefile
 
-REMARKS:
-Brief description of our code:
-In this exercise there are 2 major parts to take care of, the first part is the interface between
-the library and the clients and the second part is managing the cache.
-We've tried to separate those two part as much as we can, such that the job of the library is to
-manage the files and their file descriptors and to copy the information from the cache to user's
-buffer.
-The job of the parent class CacheAlgorithm is to check if needed blocks are in the cache and read
-information from them, where every subclass define his replacing policy in cases of cache hit or
-miss.
-The flow of the program is as follow:
-Open files - we open the files according to absolute path, meaning that if the user try to open a
-file that already open, we won't really open a new file. Instead, we return a fake file descriptor
-and add a pair of (fakeFD, realFD) to a map, where fakeFD is a counter that we made and realFD is
-the file descriptor that the open function return when we try to open this file for the first
-(and only) time. Any time a new pair like this add to the map we increase the reference counter of
-the CacheFile object that represent this file.
-Close files - in any call for close file we decrease the reference counter of this file and erase
-this (fakeFD, realFD) pair from the map. We actually close the file by his real file descriptor
-only if the reference counter turn into zero.
-Read from file - the library decide which block to read and how much to read from each block,
-when the CacheAlgorithm actually supply the information from the block (he knows only blocks, not
- files) and update the cache properly.
+Answers:
 
+
+##### Q1 #####
+
+a)
+First, we need to add another input possibility in handleRequestFromUser function to recognize
+"leave_group" command. Second, we need to add a parsing function that split the message and make
+sure all the arguments are valid (which means groupName is alphaNumeric and that there is no more
+ arguments).
+ After we make sure that the input is valid, we will send "leave_group groupName" to the server
+ and that's it.
+
+b)
+First, we will split the message and make sure that the sender client is part of group groupName.
+Second, we will get the vector of group members for this group name from groupNameToClients and
+remove this specific client from this vector, if the vector is empty we will remove this group
+from groupNameToClients map. Last, will get the vector of groups that this client is part of them
+ from clientsToGroups and remove this specific group name from this vector.
+
+
+##### Q2 #####
+We prefer TCP because of that big advantages:
+
+1) TCP protocol is reliable, that means that every message we send we can know for sure that it
+will send only once and transfers completely - critical property when you build whataspp like
+program.
+
+2) TCP protocol is connection oriented, which means that the client can know if his message gets
+to it's destination - it is important because otherwise he cannot know if he need to send it again.
+
+
+##### Q3 #####
+Two examples of us for applications that use UDP:
+
+1) Online games - The connection between the players and the game ,
+must be fast in order to create responsive game experience.
+
+2) Video Chat - In a video chat, the image and sound must be synchronized and continuously,
+therefore UDP is more effective in these form of applications.
+
+##### Q4 #####
+Firstly, in order to create a system that recovers from server crash we would create a log.
+Now instead using std::cout we would have written the messages to the log file.
+Hence, on a event of a server crash we could recover the conversations and the rest of the output.
+
+Secondly, we would backup the server data structures so we can know which client was connected
+and which group was created.
+
+Of course we will lose the information that was parsed by the client and not yet send to the
+server, and also the what was processed by the server at the time of the crash.
