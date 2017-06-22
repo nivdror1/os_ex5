@@ -32,6 +32,7 @@ struct sockaddr_in sa;
 
 typedef std::map<std::string , std::vector<std::string>>::iterator clientsToGroupsIter;
 
+
 std::vector<std::string> split(const std::string &text, char delim, int counter) {
 	std::stringstream textStream(text);
 	std::string item;
@@ -65,7 +66,7 @@ void init(int welcomeSocket, char* port){
 	sockIdentifier[WELCOME_SOCKET] = welcomeSocket;
 
 	//init the struct sockaddr_in
-	memset(&sa, 0, sizeof(struct sockaddr));//todo check if memset can fail
+	memset(&sa, 0, sizeof(struct sockaddr));
 	sa.sin_family= AF_INET;
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
 	unsigned short portnum = (unsigned short)atoi(port);
@@ -80,8 +81,8 @@ void init(int welcomeSocket, char* port){
  */
 void sendMessageToClient(int socketFd, std::string message){
 	if(send(socketFd,message.c_str(),message.size(),0) != (ssize_t)message.size()){
-		//todo error
-        std::cout << "Fail\n";
+        std::cerr << "ERROR: send " << errno << ".\n";
+        exit(1);
 	}
 }
 
@@ -123,19 +124,20 @@ void connectNewClient(){
 	int addressLength = sizeof(sa);
 	//check for the max clients connected
 	if(sockIdentifier.size() == 31){
-		//todo error
+        return; //todo error check in the future
 	}
     //accept the new client
 	int newSocket = accept(sockIdentifier.at(WELCOME_SOCKET),(struct sockaddr *)&sa, (socklen_t*)&addressLength );
 	if(newSocket < 0){
-		//todo error
+        std::cerr << "ERROR: accept " << errno << ".\n";
+        exit(1);
 	}
 	//read the message
 	if(read(newSocket,clientName,MAX_CHAR_CLIENT_NAME)< 0){
 		//send to the client that he didn't connect to the client
 		sendMessageToClient( newSocket,"Failed to connect the server.\n");
-		return;
-		//todo error
+        std::cerr << "ERROR: read " << errno << ".\n";
+        exit(1);
 	}
 	//send a message whether the connection has succeed
 	sendConnectionMessage( newSocket,clientName);
@@ -146,28 +148,35 @@ void connectNewClient(){
  */
 void exitServer(){
 	char buf[MAX_CHAR];
-	if (read(STDIN_FILENO, buf, MAX_CHAR) < 0){
-		//todo error
+    ssize_t numberOfBytesRead = read(STDIN_FILENO, buf, MAX_CHAR);
+	if (numberOfBytesRead < 0){
+        std::cerr << "ERROR: read " << errno << ".\n";
+        exit(1);
 	}
-	if (strcmp(buf, "EXIT") != 0){
-		// todo error
+    std::string bufferString(buf);
+
+	if (bufferString.substr(0, numberOfBytesRead) == "EXIT"){
+        std::cerr << "ERROR: Invalid input.\n";
+        exit(1);
 	}
 
 	FD_ZERO(&listeningFds);
 	//close all socket fd's
 	for (auto iter = sockIdentifier.begin(); iter!= sockIdentifier.end(); ++iter){
-        sendMessageToClient((*iter).second, "Shut down server.\n");
+        if ((*iter).first != WELCOME_SOCKET){
+            sendMessageToClient((*iter).second, "Shut down server.\n");
+        }
 		if(close((*iter).second)==-1){
-			//todo error
+            std::cerr << "ERROR: close " << errno << ".\n";
+            exit(1);
 		}
 	}
 	//clear the maps
 	sockIdentifier.clear();
 	groupNameToClients.clear();
 	clientsToGroups.clear();
-	//todo delete sockaddr_in sa
 
-	std::cout<<"EXIT command is typed: server is shutting down"<<std::endl;
+	std::cout<<"EXIT command is typed: server is shutting down.\n";
 	exit(0);
 }
 
@@ -201,7 +210,7 @@ void removeClientFromGroups(clientsToGroupsIter groupsNamesIter, std::string cli
     //for each group erase the client name from group member map
     for (unsigned int i = 0; i < groupNamesVec.size(); i++) {
         auto curIter = groupNameToClients.find(groupNamesVec.at(i));
-        std::set<std::string> curGroup = (*curIter).second;
+        std::set<std::string>& curGroup = (*curIter).second;
         curGroup.erase(std::find(curGroup.begin(), curGroup.end(), clientName));
     }
     //erase from the clientToGroups map
@@ -225,7 +234,8 @@ void removeClient(std::string clientName){
 	std::cout<< clientName + ": Unregistered successfully.\n";
 
 	if(close (sockIdentifier.at(clientName))== -1){
-		//todo error
+        std::cerr << "ERROR: close " << errno << ".\n";
+        exit(1);
 	}
 	sockIdentifier.erase(clientName);
 
@@ -289,11 +299,6 @@ void createNewGroup(std::string &clientName, std::string &groupNameAndMembers){
 	//erase the command and group name from the vector
 	splitGroupNameAndMembers.erase(splitGroupNameAndMembers.begin());
 
-	if(splitGroupNameAndMembers.size() == 0 ||
-			(splitGroupNameAndMembers.size() == 1 && splitGroupNameAndMembers.at(0) == clientName)){
-		createGroupErrorMessage(clientName, groupName); //output the error message
-		return;
-	}
 	//check if the clients exists and insert them to the set
 	std::set<std::string> clientSet = checkIfClientsExists(clientName,groupName, splitGroupNameAndMembers);
 	if(clientSet.size() == 0){
@@ -316,6 +321,11 @@ void createNewGroup(std::string &clientName, std::string &groupNameAndMembers){
 void sendMessageToGroup(std::string &senderName, std::string &receiverName, std::string &text,
                         std::string &message){
     std::set<std::string> groupUsers = groupNameToClients.at(receiverName) ;
+    if (groupUsers.find(senderName) == groupUsers.end()){
+        sendMessageToClient(sockIdentifier.at(senderName), "ERROR: failed to send.\n");
+        std::cout<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ".\n";
+        return;
+    }
     for (auto iter= groupUsers.begin(); iter != groupUsers.end();++iter){
         if((*iter) != senderName){
             sendMessageToClient(sockIdentifier.at((*iter)),text+ message + "\n");
@@ -387,8 +397,9 @@ void handleClientRequest(int ready,fd_set &readFds) {
 			memset(buf, '0', sizeof(buf));
 			ssize_t numberOfBytesRead = read((*iter).second, buf, MAX_CHAR);
 			if(numberOfBytesRead < 0){
-				//todo error
-			}
+                std::cerr << "ERROR: read " << errno << ".\n";
+                exit(1);
+            }
 			buf[numberOfBytesRead] = '\0';
 			//parse the messages and executes them
 			parseAndExec((*iter).first, (char*)buf);
@@ -424,42 +435,53 @@ void wakeUpServer(fd_set &readFds, int ready, int welcomeSocket){
 	}
 }
 
+/**
+ * reset the set containing fd's
+ */
+void resetFdSet(){
+    FD_ZERO(&listeningFds);
+    for(auto iter=  sockIdentifier.begin();iter!=sockIdentifier.end();++iter){
+        FD_SET((*iter).second,&listeningFds);
+    }
+    FD_SET(STDIN_FILENO,&listeningFds);
+}
+
 int main(int argc, char *argv[]){
 
 	if(argc != 2){
-		//todo error
-		return -1;
+        std::cerr << "Usage: whatsappServer portNum" << std::endl;
+        exit(1);
 	}
 	//create a new socket
 	int welcomeSocket = socket(AF_INET,SOCK_STREAM,0);
 	if(welcomeSocket  == -1){
-		//todo error
-		return -1;
+        std::cerr << "ERROR: socket " << errno << ".\n";
+        exit(1);
 	}
 
 	init(welcomeSocket,argv[1]);
 	//bind the main server socket
 	if (bind(welcomeSocket , (struct sockaddr *)&sa , sizeof(sa)) < 0) {
-		close(welcomeSocket );//todo error close can fail
-		return(-1);
+        std::cerr << "ERROR: bind " << errno << ".\n";
+        if (close(welcomeSocket) < 0){
+            std::cerr << "ERROR: close " << errno << ".\n";
+        }
+        exit(1);
 	}
 
-	if(listen(welcomeSocket,MAX_CLIENTS) == -1){
-		//todo error
-		return -1;
-	}
-
+	if(listen(welcomeSocket,MAX_CLIENTS) == -1)
+    {
+        std::cerr << "ERROR: listen " << errno << ".\n";
+        exit(1);
+    }
 	while(true){
-		FD_ZERO(&listeningFds);
-		for(auto iter=  sockIdentifier.begin();iter!=sockIdentifier.end();++iter){
-			FD_SET((*iter).second,&listeningFds);
-		}
-		fd_set readFds = listeningFds;
+        resetFdSet();
+        fd_set readFds = listeningFds;
 		int ready;
 
 		if((ready = select(FD_SETSIZE, &readFds, NULL, NULL,NULL))<0){
-			//todo error
-			return -1;
+            std::cerr << "ERROR: select " << errno << ".\n";
+            return -1;
 		}
 		if(ready > 0){
 			wakeUpServer(readFds,ready,welcomeSocket);

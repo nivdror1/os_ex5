@@ -8,7 +8,6 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
-#include <vector>
 #include <set>
 #include <arpa/inet.h>
 
@@ -58,15 +57,17 @@ void init(char* argv[]){
 
     nickname = argv[1];
     if (isNotAlphaNumeric(nickname)){
-        // todo usage error
+        std::cerr<< "Failed to connect the server.\n";
+        exit(1);
     }
     unsigned char buf[sizeof(struct in6_addr)];
     if (inet_pton(AF_INET, argv[2], buf) == 0){
-        // todo usage error (not an IP address)
+        std::cerr<< "Failed to connect the server.\n";
+        exit(1);
     }
 
 	//init the struct sockaddr_in
-	memset(&sa, 0, sizeof(struct sockaddr_in));//todo check if memset can fail
+	memset(&sa, 0, sizeof(struct sockaddr_in));
 	sa.sin_family= AF_INET;
 	sa.sin_addr.s_addr = inet_addr(argv[2]);
 	unsigned short portnum = (unsigned short)atoi(argv[3]);
@@ -78,21 +79,28 @@ std::string parseCreateGroup(std::string &message){
 	std::vector<std::string> splitMessage = split(message, ' ', 2);
     // if splitMessage.size() == 2 that is format error
 	if (splitMessage.size() != 2){
-		// todo usage error
+        if(splitMessage.size() == 0){
+            std::cerr<< "ERROR: failed to create group \"\".\n";
+        }else{
+            std::cerr<< "ERROR: failed to create group \""+splitMessage.at(0)+"\".\n";
+        }
+        return {};
 	}
 	std::string groupName = splitMessage.at(0);
-
-	if (isNotAlphaNumeric(groupName)){
-		//todo usage error
-	}
 	std::vector<std::string> groupMembers = split(splitMessage.at(1), ',', 30);
-    // if groupMembers.size() > 30 then there is more than 30 group members and that is format error
-	if (groupMembers.size() > 30){
-		// todo usage error
+
+	// if first condition is true, then that is one man group, and this is error
+	// if groupMembers.size() > 30 then there is more than 30 group members and that is format error
+	if((groupMembers.size() == 1 && groupMembers.at(0) == nickname) || groupMembers.size() > 30 ){
+        std::cerr<< "ERROR: failed to create group \""+ groupName +"\".\n";
+        return {};
 	}
-	if (std::find_if(groupMembers.begin(), groupMembers.end(),isNotAlphaNumeric) != groupMembers.end()){
-		// todo usage error
-	}
+	if (isNotAlphaNumeric(groupName) || std::find_if(groupMembers.begin(), groupMembers.end(),
+												  isNotAlphaNumeric) != groupMembers.end())
+    {
+        std::cerr << "ERROR: failed to create group \"" + groupName + "\".\n";
+        return {};
+    }
 	std::string groupMembersWithSpaces;
 	for (unsigned int i = 0; i < groupMembers.size()-1; i++){
 		groupMembersWithSpaces += groupMembers.at(i) + " ";
@@ -105,44 +113,59 @@ std::string parseSendCommand(std::string &message){
     std::vector<std::string> splitMessage = split(message, ' ', 1);
     // if splitMessage.size() <= 1 then receiver name or the actual message is missing
     if (splitMessage.size() <= 1){
-        // todo usage error
+        std::cerr<< "ERROR: failed to send.\n";
+        return {};
     }
     std::string receiverName = splitMessage.at(0);
 
     if (isNotAlphaNumeric(receiverName) || receiverName == nickname){
-        //todo usage error
+        std::cerr<< "ERROR: failed to send.\n";
+        return {};
     }
     return receiverName + " " + splitMessage.at(1);
 }
 
 void handleRequestFromUser(){
 	char buf[MAX_CHAR];
+    std::string groupText,sendText;
 	if (read(STDIN_FILENO, buf, MAX_CHAR) < 0){
-		//todo error
+        std::cerr << "ERROR: read " << errno << ".\n";
+        exit(1);
 	}
 	std::vector<std::string> splitMessage = split(buf, ' ', 1);
 	auto found = splitMessage.at(0).find_first_of("\n");
-//	if(found!= std::string::npos){
-//		splitMessage.at(0) = splitMessage.at(0).substr(0, found);
-//	}
 	std::string messageToServer = splitMessage.at(0);
     if(splitMessage.at(0) == "create_group"){
 	    size_t messageLength = splitMessage.at(1).find_last_of("\n");
 	    std::string messageWithoutEndl = splitMessage.at(1).substr(0, messageLength);
-		messageToServer += " " + parseCreateGroup(messageWithoutEndl);
+        if((groupText =parseCreateGroup(messageWithoutEndl)).empty()){
+            return;
+        }
+		messageToServer += " " + groupText;
 	}else if(splitMessage.at(0) == "send"){
 	    size_t messageLength = splitMessage.at(1).find_last_of("\n");
 	    std::string messageWithoutEndl = splitMessage.at(1).substr(0, messageLength);
-        messageToServer += " " + parseSendCommand(messageWithoutEndl);
-	}else if(splitMessage.at(0).substr(0,found) == "who" || splitMessage.at(0).substr(0,found) == "exit"){
-        if (splitMessage.size() != 1){
-            // todo usage error
+        if((sendText =parseSendCommand(messageWithoutEndl)).empty()){
+            return;
         }
+        messageToServer += " " + sendText;
+	}else if(splitMessage.at(0).substr(0,found) == "who"){
+        if (splitMessage.size() != 1){
+            std::cerr<< "ERROR: failed to receive list of connected clients.\n";
+            return;
+        }
+    }else if(splitMessage.at(0).substr(0,found) == "exit"){
+            if (splitMessage.size() != 1){
+                std::cerr<< "ERROR: failed to exit.\n";
+                return;
+            }
 	}else{
-		//todo usage error
+        std::cerr<< "ERROR: Invalid input.\n";
+        return;
 	}
     if(send(clientSocket,messageToServer.c_str(),messageToServer.size(),0) != (ssize_t)messageToServer.size()){
-        //todo error
+        std::cerr << "ERROR: send " << errno << ".\n";
+        exit(1);
     }
 }
 
@@ -166,9 +189,14 @@ void getMessageFromServer(){
 	memset(buf, '0', sizeof(buf));
 	ssize_t numberOfBytesRead = read(clientSocket, buf, MAX_CHAR);
 	if(numberOfBytesRead < 0){
-		//todo error
+        std::cerr << "ERROR: read " << errno << ".\n";
+        exit(1);
 	}
 	std::string text = buf;
+    //check if it's an error
+    if(text.substr(0,5)=="ERROR"){
+        std::cerr<<text.substr(0,(size_t)numberOfBytesRead);
+    }
 	text = text.substr(0,(size_t)numberOfBytesRead);
     checkIfShouldTerminate(text.c_str());
 
@@ -187,23 +215,28 @@ void wakeUpClient(fd_set &readFds){
 void connectToServer(char* clientName){
 	//connect to the main server socket
 	if (connect(clientSocket , (struct sockaddr *)&sa , sizeof(sa)) < 0) {
-		close(clientSocket );//todo error close can fail
+        std::cerr << "ERROR: connect " << errno << ".\n";
+		if(close(clientSocket )){
+            std::cerr << "ERROR: close " << errno << ".\n";
+        }
+        exit(1);
 	}
     if(send(clientSocket, clientName,strlen(clientName) + 1,0) != (ssize_t)strlen(clientName) + 1){
-        //todo error
+        std::cerr << "ERROR: send " << errno << ".\n";
+        exit(1);
     }
 }
 
 int main(int argc, char *argv[]){
 
 	if(argc != 4){
-		//todo error
-		return -1;
+        std::cerr << "Usage: whatsappClient clientName serverAddress serverPort" << std::endl;
+        exit(1);
 	}
 	//create a new socket
 	if((clientSocket = socket(AF_INET, SOCK_STREAM,0)) == -1){
-		//todo error
-		return -1;
+        std::cerr << "ERROR: socket " << errno << ".\n";
+        exit(1);
 	}
 	init(argv);
     connectToServer(argv[1]);
@@ -211,8 +244,8 @@ int main(int argc, char *argv[]){
 	while(true){
 		fd_set readFds = listeningFds;
 		if((ready = select(clientSocket+1, &readFds, NULL, NULL,NULL))<0){
-			//todo error
-			return -1;
+            std::cerr << "ERROR: select " << errno << ".\n";
+            exit(1);
 		}
 		if(ready > 0){
 			wakeUpClient(readFds);
