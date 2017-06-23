@@ -32,7 +32,13 @@ struct sockaddr_in sa;
 
 typedef std::map<std::string , std::vector<std::string>>::iterator clientsToGroupsIter;
 
-
+/**
+ * @brief splits the text counter times according to delimiter parameter.
+ * @param text the text to split
+ * @param delim the delimiter to split according to.
+ * @param counter number of times to split
+ * @return vector of tokens from this text
+ */
 std::vector<std::string> split(const std::string &text, char delim, int counter) {
 	std::stringstream textStream(text);
 	std::string item;
@@ -86,7 +92,14 @@ void sendMessageToClient(int socketFd, std::string message){
 	}
 }
 
-std::string addClientToDatastructures(int newSocket, char* clientName){
+/**
+ * @brief adds new client of socket id newSocket and client name clientName to the relvant data
+ * structures of this server
+ * @param newSocket new client socket file descriptor
+ * @param clientName the name of the new client
+ * @return connected successfully message
+ */
+std::string addClientToDataStructures(int newSocket, char* clientName){
     sockIdentifier[clientName] = newSocket;
     std::vector<std::string> groupName;
     clientsToGroups[clientName]= groupName;
@@ -109,15 +122,15 @@ void sendConnectionMessage(int newSocket, void* name){
 
 	//in case the client name isn't in the map , add it
 	if(searchClientName == sockIdentifier.end()){
-        sendMessageToClient(newSocket, addClientToDatastructures(newSocket, clientName));
+        sendMessageToClient(newSocket, addClientToDataStructures(newSocket, clientName));
 	}else{
         sendMessageToClient(newSocket, "Client name is already in use.\n");
 	}
 }
 
 /**
- * connceting a new client , and send a message to client whether the connection was a success or not
- * and add him to the map of socketIdentifier
+ * connecting a new client , and send a message to client whether the connection was a success or
+ * not and add him to the map of socketIdentifier
  */
 void connectNewClient(){
 	void *clientName[MAX_CHAR_CLIENT_NAME];
@@ -184,27 +197,35 @@ void exitServer(){
  * send all of the connected client at the "who" request
  * @param clientName the client name requested it
  */
-void sendConnectedClients(std::string clientName){
+void sendConnectedClients(std::string clientName)
+{
 
-	//append all client to a string
-	std::string sortedClients;
-	for (auto iter = sockIdentifier.begin(); iter != sockIdentifier.end(); ++iter)
-	{
-		// do not append the client name to the string of sorted clients
-		if( WELCOME_SOCKET != (*iter).first) {
-			sortedClients.append(iter->first + ",");
-		}
-	}
-	sortedClients.erase(sortedClients.size()-1,1); //remove the final comma
-	sortedClients.append("\n");
-	//send a message to the client containing the clients
-	sendMessageToClient(sockIdentifier.at(clientName), sortedClients);
+    //append all client to a string
+    std::string sortedClients;
+    for (auto iter = sockIdentifier.begin(); iter != sockIdentifier.end(); ++iter)
+    {
+        // do not append the client name to the string of sorted clients
+        if (WELCOME_SOCKET != (*iter).first)
+        {
+            sortedClients.append(iter->first + ",");
+        }
+    }
+    sortedClients.erase(sortedClients.size() - 1, 1); //remove the final comma
+    sortedClients.append("\n");
+    //send a message to the client containing the clients
+    sendMessageToClient(sockIdentifier.at(clientName), sortedClients);
 
-	//output server
-	std::cout<< clientName + ": Requests the currently connected client names.\n";
+    //output server
+    std::cout << clientName + ": Requests the currently connected client names.\n";
 
 }
 
+/**
+ * @brief remove client clientName from all the groups that he belongs to.
+ * @param groupsNamesIter iterator to vector contains all the names of the group that clientName
+ * belongs to.
+ * @param clientName the name of the client to remove
+ */
 void removeClientFromGroups(clientsToGroupsIter groupsNamesIter, std::string clientName){
     std::vector<std::string> groupNamesVec = (*groupsNamesIter).second;
     //for each group erase the client name from group member map
@@ -318,8 +339,14 @@ void createNewGroup(std::string &clientName, std::string &groupNameAndMembers){
 
 }
 
-void sendMessageToGroup(std::string &senderName, std::string &receiverName, std::string &text,
-                        std::string &message){
+/**
+ * @brief sends from senderName to a group with name receiverName the given message.
+ * @param senderName the name of the client that sends the message.
+ * @param receiverName the name of the group that will receive this message.
+ * @param message the message to send
+ */
+void sendMessageToGroup(std::string &senderName, std::string &receiverName, std::string &message){
+    std::string text = senderName +": ";
     std::set<std::string> groupUsers = groupNameToClients.at(receiverName) ;
     if (groupUsers.find(senderName) == groupUsers.end()){
         sendMessageToClient(sockIdentifier.at(senderName), "ERROR: failed to send.\n");
@@ -336,11 +363,16 @@ void sendMessageToGroup(std::string &senderName, std::string &receiverName, std:
     std::cout<< text + "\"" + message + "\" was sent successfully to " + receiverName + ".\n";
 }
 
+/**
+ * @brief sends the message containing in splitMessage from the client names' senderName
+ * @param senderName the name of the client that sends the message
+ * @param splitMessage string contains the actual message and receiver name
+ */
 void sendMessage(std::string &senderName, std::string &splitMessage){
 	auto receiverAndMessage = split(splitMessage, ' ', 1);
 	std::string receiverName = receiverAndMessage.at(0);
 	//decipher the message
-	std::string text = senderName +": ";
+    std::string text = senderName +": ";
 	std::string message = receiverAndMessage.at(1);
 
 	//check if the receiver name is a client then send the message only to him
@@ -353,7 +385,7 @@ void sendMessage(std::string &senderName, std::string &splitMessage){
 	//check if the receiver name is a group then send the message only to the group user's
 	//without sending it the to sender client
 	else if(groupNameToClients.find(receiverName) != groupNameToClients.end()){
-        sendMessageToGroup(senderName, receiverName, text, message);
+        sendMessageToGroup(senderName, receiverName, message);
 	}else{
 		sendMessageToClient(sockIdentifier.at(senderName), "ERROR: failed to send.\n");
 		std::cerr<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ""

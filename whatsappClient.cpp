@@ -11,16 +11,27 @@
 #include <set>
 #include <arpa/inet.h>
 
+/* Maximum number of characters in message include protocol format. */
 #define MAX_CHAR 400
 
+/* File descriptors' set, contain std::cin and client socket. */
 fd_set listeningFds;
 
 struct sockaddr_in sa;
 
+/* The name of this client. */
 std::string nickname;
 
+/* The client socket. */
 int clientSocket;
 
+/**
+ * @brief splits the text counter times according to delimiter parameter.
+ * @param text the text to split
+ * @param delim the delimiter to split according to.
+ * @param counter number of times to split
+ * @return vector of tokens from this text
+ */
 std::vector<std::string> split(const std::string &text, char delim, int counter) {
     std::stringstream textStream(text);
     std::string item;
@@ -41,6 +52,11 @@ std::vector<std::string> split(const std::string &text, char delim, int counter)
     return tokens;
 }
 
+/**
+ * @brief returns true if the given input contains characters that aren't alphanumeric
+ * @param name the name to check
+ * @return true if the given input contains characters that aren't alphanumeric, false otherwise
+ */
 bool isNotAlphaNumeric(std::string &name){
     auto compare = [](char c) { return !(isalnum(c)); };
     return std::find_if(name.begin(), name.end(),compare) != name.end();
@@ -75,6 +91,12 @@ void init(char* argv[]){
 	sa.sin_port = htons(portnum);
 }
 
+/**
+ * @brief parses the given create group message, checks if the input is valid
+ * @param message create group message
+ * @return if the message is valid returns string of the tokens of create group message splits by
+ * whitespace, empty string otherwise.
+ */
 std::string parseCreateGroup(std::string &message){
 
 	std::vector<std::string> splitMessage = split(message, ' ', 2);
@@ -110,6 +132,12 @@ std::string parseCreateGroup(std::string &message){
 	return groupName + " " + groupMembersWithSpaces;
 }
 
+/**
+ * @brief parses the given create group message, checks if the input is valid
+ * @param message create group message
+ * @return if the message is valid returns string of the tokens of create group message splits by
+ * whitespace, empty string otherwise.
+ */
 std::string parseSendCommand(std::string &message){
     std::vector<std::string> splitMessage = split(message, ' ', 1);
     // if splitMessage.size() <= 1 then receiver name or the actual message is missing
@@ -126,6 +154,10 @@ std::string parseSendCommand(std::string &message){
     return receiverName + " " + splitMessage.at(1);
 }
 
+/**
+ * @brief Gets message from user, if the message is valid send it to the server, otherwise print
+ * error message.
+ */
 void handleRequestFromUser(){
 	char buf[MAX_CHAR];
     memset(buf, '0', sizeof(buf));
@@ -174,6 +206,11 @@ void handleRequestFromUser(){
     }
 }
 
+/**
+ * @brief checks the message from the server, exit from server if it is terminate message according
+ * to communication protocol.
+ * @param message
+ */
 void checkIfShouldTerminate(const char* message){
     if (strcmp(message, "Client name is already in use.\n") == 0 ||
         strcmp(message, "Failed to connect the server.\n") == 0){
@@ -189,6 +226,9 @@ void checkIfShouldTerminate(const char* message){
     }
 }
 
+/**
+ * @brief Gets message from server, checks if this client should terminate and prints accordingly.
+ */
 void getMessageFromServer(){
 	char buf[400];
 	memset(buf, '0', sizeof(buf));
@@ -209,6 +249,10 @@ void getMessageFromServer(){
 	std::cout << text;
 }
 
+/**
+ * @brief checks if the message come from the user or the server and acts accordingly.
+ * @param readFds
+ */
 void wakeUpClient(fd_set &readFds){
 	if(FD_ISSET(STDIN_FILENO,&readFds)){
 		handleRequestFromUser();
@@ -218,6 +262,10 @@ void wakeUpClient(fd_set &readFds){
 	}
 }
 
+/**
+ * @brief Gets client name as an input and try to connect and send it to the server.
+ * @param clientName the name of this client
+ */
 void connectToServer(char* clientName){
 	//connect to the main server socket
 	if (connect(clientSocket , (struct sockaddr *)&sa , sizeof(sa)) < 0) {
