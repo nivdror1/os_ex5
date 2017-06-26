@@ -268,14 +268,14 @@ void wakeUpClient(fd_set &readFds){
  */
 void connectToServer(char* clientName){
 	//connect to the main server socket
-	if (connect(clientSocket , (struct sockaddr *)&sa , sizeof(sa)) < 0) {
+	if ( (connect(clientSocket , (struct sockaddr *)&sa , sizeof(sa))) < 0) {
         std::cerr << "ERROR: connect " << errno << ".\n";
 		if(close(clientSocket )){
             std::cerr << "ERROR: close " << errno << ".\n";
         }
         exit(1);
 	}
-    if(send(clientSocket, clientName,strlen(clientName) + 1,0) != (ssize_t)strlen(clientName) + 1){
+    if((send(clientSocket, clientName,strlen(clientName) + 1,0)) != (ssize_t)strlen(clientName) + 1){
         std::cerr << "ERROR: send " << errno << ".\n";
         exit(1);
     }

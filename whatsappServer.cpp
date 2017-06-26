@@ -86,7 +86,7 @@ void init(int welcomeSocket, char* port){
  * @param message the message to be sent
  */
 void sendMessageToClient(int socketFd, std::string message){
-	if(send(socketFd,message.c_str(),message.size(),0) != (ssize_t)message.size()){
+	if( (send(socketFd,message.c_str(),message.size(),0)) != (ssize_t)message.size()){
         std::cerr << "ERROR: send " << errno << ".\n";
         exit(1);
 	}
@@ -146,7 +146,7 @@ void connectNewClient(){
         exit(1);
 	}
 	//read the message
-	if(read(newSocket,clientName,MAX_CHAR_CLIENT_NAME)< 0){
+	if( (read(newSocket,clientName,MAX_CHAR_CLIENT_NAME)) < 0){
 		//send to the client that he didn't connect to the client
 		sendMessageToClient( newSocket,"Failed to connect the server.\n");
         std::cerr << "ERROR: read " << errno << ".\n";
@@ -179,7 +179,7 @@ void exitServer(){
         if ((*iter).first != WELCOME_SOCKET){
             sendMessageToClient((*iter).second, "Shut down server.\n");
         }
-		if(close((*iter).second)==-1){
+		if( (close((*iter).second)) ==-1){
             std::cerr << "ERROR: close " << errno << ".\n";
             exit(1);
 		}
@@ -254,7 +254,7 @@ void removeClient(std::string clientName){
 	//output server
 	std::cout<< clientName + ": Unregistered successfully.\n";
 
-	if(close (sockIdentifier.at(clientName))== -1){
+	if( (close(sockIdentifier.at(clientName))) == -1){
         std::cerr << "ERROR: close " << errno << ".\n";
         exit(1);
 	}
@@ -287,7 +287,7 @@ std::set<std::string> checkIfClientsExists(std::string  &clientName,
 	for( auto iter= begin; iter != end;++iter){
 
 		//check if the client exists if not send an error!!!
-		if(sockIdentifier.find(*iter)== sockIdentifier.end()){
+		if(sockIdentifier.find(*iter) == sockIdentifier.end()){
 			createGroupErrorMessage(clientName, groupName); //output the error message
 			clientSet.clear();
 			return clientSet;
@@ -312,11 +312,15 @@ void createNewGroup(std::string &clientName, std::string &groupNameAndMembers){
 	//getting the group name
 	std::string groupName = splitGroupNameAndMembers.at(0);
 
-	//check if the group name already exists
+	//check if the group name already exists as group or client
 	if(groupNameToClients.find(groupName) != groupNameToClients.end()){
 		createGroupErrorMessage(clientName, groupName); //output the error message
 		return;
 	}
+    if(sockIdentifier.find(groupName) != sockIdentifier.end()){
+        createGroupErrorMessage(clientName, groupName); //output the error message
+        return;
+    }
 	//erase the command and group name from the vector
 	splitGroupNameAndMembers.erase(splitGroupNameAndMembers.begin());
 
@@ -350,8 +354,7 @@ void sendMessageToGroup(std::string &senderName, std::string &receiverName, std:
     std::set<std::string> groupUsers = groupNameToClients.at(receiverName) ;
     if (groupUsers.find(senderName) == groupUsers.end()){
         sendMessageToClient(sockIdentifier.at(senderName), "ERROR: failed to send.\n");
-        std::cerr<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ""
-                                                                                                       ".\n";
+        std::cerr<< senderName + ": ERROR: failed to send \"" + message + "\" to "+ receiverName+ ".\n";
         return;
     }
     for (auto iter= groupUsers.begin(); iter != groupUsers.end();++iter){
@@ -495,7 +498,7 @@ int main(int argc, char *argv[]){
 
 	init(welcomeSocket,argv[1]);
 	//bind the main server socket
-	if (bind(welcomeSocket , (struct sockaddr *)&sa , sizeof(sa)) < 0) {
+	if ( (bind(welcomeSocket , (struct sockaddr *)&sa , sizeof(sa))) < 0) {
         std::cerr << "ERROR: bind " << errno << ".\n";
         if (close(welcomeSocket) < 0){
             std::cerr << "ERROR: close " << errno << ".\n";
@@ -503,7 +506,7 @@ int main(int argc, char *argv[]){
         exit(1);
 	}
 
-	if(listen(welcomeSocket,MAX_CLIENTS) == -1)
+	if( (listen(welcomeSocket,MAX_CLIENTS)) == -1)
     {
         std::cerr << "ERROR: listen " << errno << ".\n";
         exit(1);
